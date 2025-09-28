@@ -1,14 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <ImageView
-        android:id="@+id/earth_image"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:adjustViewBounds="true"
+    <com.pykens.earthzoo.ui.InteractiveEarthView
+        android:id="@+id/interactive_earth"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:contentDescription="@string/earth_content_description"
-        android:scaleType="fitCenter" />
-</FrameLayout>
+        android:scaleType="fitCenter"
+        android:src="@drawable/earth"
+        app:layout_constraintBottom_toTopOf="@+id/selected_continent_label"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/selected_continent_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:text="@string/continent_selection_hint"
+        android:textAlignment="center"
+        android:textColor="@android:color/white"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/interactive_earth" />
+</androidx.constraintlayout.widget.ConstraintLayout>
