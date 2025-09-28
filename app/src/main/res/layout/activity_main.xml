@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <gov.nasa.worldwind.WorldWindow
+        android:id="@+id/world_window"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+</FrameLayout>
