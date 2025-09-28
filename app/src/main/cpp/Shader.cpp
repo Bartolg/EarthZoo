@@ -9,7 +9,11 @@ Shader *Shader::loadShader(
         const std::string &fragmentSource,
         const std::string &positionAttributeName,
         const std::string &uvAttributeName,
-        const std::string &projectionMatrixUniformName) {
+        const std::string &modelMatrixUniformName,
+        const std::string &viewMatrixUniformName,
+        const std::string &projectionMatrixUniformName,
+        const std::string &lightDirectionUniformName,
+        const std::string &textureUniformName) {
     Shader *shader = nullptr;
 
     GLuint vertexShader = loadShader(GL_VERTEX_SHADER, vertexSource);
@@ -49,20 +53,43 @@ Shader *Shader::loadShader(
             // indices with layout= in your shader, but it is not done in this sample
             GLint positionAttribute = glGetAttribLocation(program, positionAttributeName.c_str());
             GLint uvAttribute = glGetAttribLocation(program, uvAttributeName.c_str());
+            GLint modelMatrixUniform = glGetUniformLocation(
+                    program,
+                    modelMatrixUniformName.c_str());
+            GLint viewMatrixUniform = glGetUniformLocation(
+                    program,
+                    viewMatrixUniformName.c_str());
             GLint projectionMatrixUniform = glGetUniformLocation(
                     program,
                     projectionMatrixUniformName.c_str());
+            GLint lightDirectionUniform = glGetUniformLocation(
+                    program,
+                    lightDirectionUniformName.c_str());
+            GLint textureUniform = glGetUniformLocation(
+                    program,
+                    textureUniformName.c_str());
 
             // Only create a new shader if all the attributes are found.
             if (positionAttribute != -1
                 && uvAttribute != -1
-                && projectionMatrixUniform != -1) {
+                && modelMatrixUniform != -1
+                && viewMatrixUniform != -1
+                && projectionMatrixUniform != -1
+                && lightDirectionUniform != -1
+                && textureUniform != -1) {
 
                 shader = new Shader(
                         program,
                         positionAttribute,
                         uvAttribute,
-                        projectionMatrixUniform);
+                        modelMatrixUniform,
+                        viewMatrixUniform,
+                        projectionMatrixUniform,
+                        lightDirectionUniform,
+                        textureUniform);
+                glUseProgram(program);
+                glUniform1i(textureUniform, 0);
+                glUseProgram(0);
             } else {
                 glDeleteProgram(program);
             }
@@ -149,6 +176,18 @@ void Shader::drawModel(const Model &model) const {
     glDisableVertexAttribArray(position_);
 }
 
-void Shader::setProjectionMatrix(float *projectionMatrix) const {
-    glUniformMatrix4fv(projectionMatrix_, 1, false, projectionMatrix);
+void Shader::setModelMatrix(const float *modelMatrix) const {
+    glUniformMatrix4fv(modelMatrix_, 1, GL_FALSE, modelMatrix);
+}
+
+void Shader::setViewMatrix(const float *viewMatrix) const {
+    glUniformMatrix4fv(viewMatrix_, 1, GL_FALSE, viewMatrix);
+}
+
+void Shader::setProjectionMatrix(const float *projectionMatrix) const {
+    glUniformMatrix4fv(projectionMatrix_, 1, GL_FALSE, projectionMatrix);
+}
+
+void Shader::setLightDirection(const float *direction) const {
+    glUniform3fv(lightDirection_, 1, direction);
 }

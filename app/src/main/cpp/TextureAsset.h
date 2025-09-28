@@ -5,7 +5,6 @@
 #include <android/asset_manager.h>
 #include <GLES3/gl3.h>
 #include <string>
-#include <vector>
 
 class TextureAsset {
 public:
@@ -17,6 +16,8 @@ public:
      */
     static std::shared_ptr<TextureAsset>
     loadAsset(AAssetManager *assetManager, const std::string &assetPath);
+
+    static std::shared_ptr<TextureAsset> createProceduralEarthTexture();
 
     ~TextureAsset();
 

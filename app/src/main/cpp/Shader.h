@@ -8,10 +8,10 @@ class Model;
 
 /*!
  * A class representing a simple shader program. It consists of vertex and fragment components. The
- * input attributes are a position (as a Vector3) and a uv (as a Vector2). It also takes a uniform
- * to be used as the entire model/view/projection matrix. The shader expects a single texture for
- * fragment shading, and does no other lighting calculations (thus no uniforms for lights or normal
- * attributes).
+ * input attributes are a position (as a Vector3) and a uv (as a Vector2). It exposes uniforms for
+ * the model, view, and projection matrices independently as well as a single directional light
+ * vector. The shader expects a single texture for fragment shading, and performs simple diffuse
+ * lighting.
  */
 class Shader {
 public:
@@ -32,7 +32,11 @@ public:
             const std::string &fragmentSource,
             const std::string &positionAttributeName,
             const std::string &uvAttributeName,
-            const std::string &projectionMatrixUniformName);
+            const std::string &modelMatrixUniformName,
+            const std::string &viewMatrixUniformName,
+            const std::string &projectionMatrixUniformName,
+            const std::string &lightDirectionUniformName,
+            const std::string &textureUniformName);
 
     inline ~Shader() {
         if (program_) {
@@ -61,7 +65,13 @@ public:
      * Sets the model/view/projection matrix in the shader.
      * @param projectionMatrix sixteen floats, column major, defining an OpenGL projection matrix.
      */
-    void setProjectionMatrix(float *projectionMatrix) const;
+    void setModelMatrix(const float *modelMatrix) const;
+
+    void setViewMatrix(const float *viewMatrix) const;
+
+    void setProjectionMatrix(const float *projectionMatrix) const;
+
+    void setLightDirection(const float *direction) const;
 
 private:
     /*!
@@ -83,16 +93,28 @@ private:
             GLuint program,
             GLint position,
             GLint uv,
-            GLint projectionMatrix)
+            GLint modelMatrix,
+            GLint viewMatrix,
+            GLint projectionMatrix,
+            GLint lightDirection,
+            GLint textureSampler)
             : program_(program),
               position_(position),
               uv_(uv),
-              projectionMatrix_(projectionMatrix) {}
+              modelMatrix_(modelMatrix),
+              viewMatrix_(viewMatrix),
+              projectionMatrix_(projectionMatrix),
+              lightDirection_(lightDirection),
+              textureSampler_(textureSampler) {}
 
     GLuint program_;
     GLint position_;
     GLint uv_;
+    GLint modelMatrix_;
+    GLint viewMatrix_;
     GLint projectionMatrix_;
+    GLint lightDirection_;
+    GLint textureSampler_;
 };
 
 #endif //ANDROIDGLINVESTIGATIONS_SHADER_H
