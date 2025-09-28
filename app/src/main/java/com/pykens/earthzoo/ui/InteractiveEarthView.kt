@@ -6,6 +6,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
+import android.graphics.RectF
 import android.os.Parcel
 import android.os.Parcelable
 import android.util.AttributeSet
@@ -16,6 +17,8 @@ import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
 import com.pykens.earthzoo.R
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 private data class Continent(
     @StringRes val nameRes: Int,
@@ -189,14 +192,19 @@ class InteractiveEarthView @JvmOverloads constructor(
     }
 
     private val inverseMatrix = Matrix()
+    private val baseMatrix = Matrix()
+    private val zoomMatrix = Matrix()
+    private val continentBounds = RectF()
     private val workingPath = Path()
     private val transformedPath = Path()
 
     private var selectedContinent: Continent? = null
+    private var isZoomed = false
     private var onContinentSelectedListener: ((String) -> Unit)? = null
 
     init {
         isClickable = true
+        scaleType = ScaleType.MATRIX
     }
 
     fun setOnContinentSelectedListener(listener: ((String) -> Unit)?) {
@@ -225,8 +233,20 @@ class InteractiveEarthView @JvmOverloads constructor(
                 if (newSelection != null) {
                     if (selectedContinent != newSelection) {
                         selectedContinent = newSelection
+                        if (isZoomed) {
+                            resetZoom()
+                        } else {
+                            isZoomed = false
+                            imageMatrix = baseMatrix
+                            invalidate()
+                        }
                         onContinentSelectedListener?.invoke(context.getString(newSelection.nameRes))
-                        invalidate()
+                    } else {
+                        if (isZoomed) {
+                            resetZoom()
+                        } else {
+                            zoomToContinent(newSelection)
+                        }
                     }
                     performClick()
                     return true
@@ -245,6 +265,7 @@ class InteractiveEarthView @JvmOverloads constructor(
         val superState = super.onSaveInstanceState()
         val savedState = SavedState(superState)
         savedState.selectedIndex = continents.indexOf(selectedContinent)
+        savedState.isZoomed = isZoomed
         return savedState
     }
 
@@ -253,13 +274,26 @@ class InteractiveEarthView @JvmOverloads constructor(
             super.onRestoreInstanceState(state.superState)
             val restored = state.selectedIndex.takeIf { it in continents.indices }?.let { continents[it] }
             selectedContinent = restored
+            isZoomed = state.isZoomed
             if (restored != null) {
                 onContinentSelectedListener?.invoke(context.getString(restored.nameRes))
+                if (state.isZoomed) {
+                    post { zoomToContinent(restored) }
+                } else {
+                    post { resetZoom() }
+                }
+            } else if (state.isZoomed) {
+                post { resetZoom() }
             }
             invalidate()
         } else {
             super.onRestoreInstanceState(state)
         }
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        updateBaseMatrix()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -270,6 +304,110 @@ class InteractiveEarthView @JvmOverloads constructor(
         buildPathFor(drawable.intrinsicWidth.toFloat(), drawable.intrinsicHeight.toFloat(), selected)
         canvas.drawPath(transformedPath, fillPaint)
         canvas.drawPath(transformedPath, outlinePaint)
+    }
+
+    private fun updateBaseMatrix() {
+        val drawable = drawable ?: return
+        val contentWidth = width - paddingLeft - paddingRight
+        val contentHeight = height - paddingTop - paddingBottom
+        if (contentWidth <= 0 || contentHeight <= 0) {
+            return
+        }
+
+        val drawableWidth = drawable.intrinsicWidth.toFloat()
+        val drawableHeight = drawable.intrinsicHeight.toFloat()
+        val scale = min(contentWidth / drawableWidth, contentHeight / drawableHeight)
+        val dx = paddingLeft + (contentWidth - drawableWidth * scale) / 2f
+        val dy = paddingTop + (contentHeight - drawableHeight * scale) / 2f
+
+        baseMatrix.reset()
+        baseMatrix.setScale(scale, scale)
+        baseMatrix.postTranslate(dx, dy)
+
+        if (isZoomed) {
+            val matrix = selectedContinent?.let { computeZoomMatrix(it) }
+            if (matrix != null) {
+                imageMatrix = matrix
+            } else {
+                isZoomed = false
+                imageMatrix = baseMatrix
+            }
+        } else {
+            imageMatrix = baseMatrix
+        }
+        invalidate()
+    }
+
+    private fun resetZoom() {
+        isZoomed = false
+        imageMatrix = baseMatrix
+        invalidate()
+    }
+
+    private fun zoomToContinent(continent: Continent): Boolean {
+        val matrix = computeZoomMatrix(continent) ?: return false
+        imageMatrix = matrix
+        isZoomed = true
+        invalidate()
+        return true
+    }
+
+    private fun computeZoomMatrix(continent: Continent): Matrix? {
+        val drawable = drawable ?: return null
+        val contentWidth = width - paddingLeft - paddingRight
+        val contentHeight = height - paddingTop - paddingBottom
+        if (contentWidth <= 0 || contentHeight <= 0) {
+            return null
+        }
+
+        continent.fillBounds(continentBounds)
+        val boundsWidth = continentBounds.width()
+        val boundsHeight = continentBounds.height()
+        if (boundsWidth <= 0f || boundsHeight <= 0f) {
+            return null
+        }
+
+        val paddingFactor = 0.1f
+        val paddedLeft = (continentBounds.left - boundsWidth * paddingFactor).coerceAtLeast(0f)
+        val paddedTop = (continentBounds.top - boundsHeight * paddingFactor).coerceAtLeast(0f)
+        val paddedRight = (continentBounds.right + boundsWidth * paddingFactor).coerceAtMost(1f)
+        val paddedBottom = (continentBounds.bottom + boundsHeight * paddingFactor).coerceAtMost(1f)
+
+        val drawableWidth = drawable.intrinsicWidth.toFloat()
+        val drawableHeight = drawable.intrinsicHeight.toFloat()
+        val left = paddedLeft * drawableWidth
+        val top = paddedTop * drawableHeight
+        val right = paddedRight * drawableWidth
+        val bottom = paddedBottom * drawableHeight
+
+        val rectWidth = max(right - left, 1f)
+        val rectHeight = max(bottom - top, 1f)
+
+        val viewWidthF = contentWidth.toFloat()
+        val viewHeightF = contentHeight.toFloat()
+        val scale = min(viewWidthF / rectWidth, viewHeightF / rectHeight)
+
+        zoomMatrix.reset()
+        zoomMatrix.setScale(scale, scale)
+        val dx = paddingLeft + (viewWidthF - rectWidth * scale) / 2f - left * scale
+        val dy = paddingTop + (viewHeightF - rectHeight * scale) / 2f - top * scale
+        zoomMatrix.postTranslate(dx, dy)
+
+        return zoomMatrix
+    }
+
+    private fun Continent.fillBounds(outRect: RectF) {
+        var minX = Float.POSITIVE_INFINITY
+        var minY = Float.POSITIVE_INFINITY
+        var maxX = Float.NEGATIVE_INFINITY
+        var maxY = Float.NEGATIVE_INFINITY
+        for (point in polygon) {
+            minX = min(minX, point.x)
+            minY = min(minY, point.y)
+            maxX = max(maxX, point.x)
+            maxY = max(maxY, point.y)
+        }
+        outRect.set(minX, minY, maxX, maxY)
     }
 
     private fun buildPathFor(drawableWidth: Float, drawableHeight: Float, continent: Continent) {
@@ -316,16 +454,19 @@ class InteractiveEarthView @JvmOverloads constructor(
 
     private class SavedState : View.BaseSavedState {
         var selectedIndex: Int = -1
+        var isZoomed: Boolean = false
 
         constructor(superState: Parcelable?) : super(superState)
 
         constructor(parcel: Parcel) : super(parcel) {
             selectedIndex = parcel.readInt()
+            isZoomed = parcel.readInt() == 1
         }
 
         override fun writeToParcel(out: Parcel, flags: Int) {
             super.writeToParcel(out, flags)
             out.writeInt(selectedIndex)
+            out.writeInt(if (isZoomed) 1 else 0)
         }
 
         companion object {
