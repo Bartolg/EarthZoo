@@ -2,9 +2,13 @@
 
 #include <game-activity/native_app_glue/android_native_app_glue.h>
 #include <GLES3/gl3.h>
+#include <algorithm>
+#include <cmath>
+#include <iterator>
 #include <memory>
+#include <sstream>
 #include <vector>
-#include <android/imagedecoder.h>
+#include <android/keycodes.h>
 
 #include "AndroidOut.h"
 #include "Shader.h"
@@ -42,12 +46,18 @@ in vec3 inPosition;
 in vec2 inUV;
 
 out vec2 fragUV;
+out vec3 fragNormal;
 
+uniform mat4 uModel;
+uniform mat4 uView;
 uniform mat4 uProjection;
 
 void main() {
-    fragUV = inUV;
-    gl_Position = uProjection * vec4(inPosition, 1.0);
+    vec4 worldPos = uModel * vec4(inPosition, 1.0);
+    mat3 normalMatrix = mat3(uView * uModel);
+    fragNormal = normalize(normalMatrix * normalize(inPosition));
+    fragUV = vec2(inUV.x, 1.0 - inUV.y);
+    gl_Position = uProjection * uView * worldPos;
 }
 )vertex";
 
@@ -56,33 +66,32 @@ static const char *fragment = R"fragment(#version 300 es
 precision mediump float;
 
 in vec2 fragUV;
+in vec3 fragNormal;
 
 uniform sampler2D uTexture;
+uniform vec3 uLightDir;
 
 out vec4 outColor;
 
 void main() {
-    outColor = texture(uTexture, fragUV);
+    vec3 baseColor = texture(uTexture, fragUV).rgb;
+    vec3 normal = normalize(fragNormal);
+    float diffuse = max(dot(normal, normalize(uLightDir)), 0.0);
+    float ambient = 0.3;
+    float brightness = clamp(ambient + diffuse * 0.7, 0.0, 1.0);
+    vec3 litColor = baseColor * brightness;
+    float rim = pow(1.0 - max(dot(normal, vec3(0.0, 0.0, -1.0)), 0.0), 2.0);
+    litColor += vec3(0.05, 0.1, 0.2) * rim;
+    outColor = vec4(litColor, 1.0);
 }
 )fragment";
 
-/*!
- * Half the height of the projection matrix. This gives you a renderable area of height 4 ranging
- * from -2 to 2
- */
-static constexpr float kProjectionHalfHeight = 2.f;
-
-/*!
- * The near plane distance for the projection matrix. Since this is an orthographic projection
- * matrix, it's convenient to have negative values for sorting (and avoiding z-fighting at 0).
- */
-static constexpr float kProjectionNearPlane = -1.f;
-
-/*!
- * The far plane distance for the projection matrix. Since this is an orthographic porjection
- * matrix, it's convenient to have the far plane equidistant from 0 as the near plane.
- */
-static constexpr float kProjectionFarPlane = 1.f;
+static constexpr float kPi = 3.14159265358979323846f;
+static constexpr float kFieldOfViewRadians = 60.f * kPi / 180.f;
+static constexpr float kNearPlane = 0.1f;
+static constexpr float kFarPlane = 20.f;
+static constexpr float kCameraDistance = 3.0f;
+static constexpr float kMaxPitchRadians = 1.3f;
 
 Renderer::~Renderer() {
     if (display_ != EGL_NO_DISPLAY) {
@@ -106,36 +115,46 @@ void Renderer::render() {
     // changed.
     updateRenderArea();
 
-    // When the renderable area changes, the projection matrix has to also be updated. This is true
-    // even if you change from the sample orthographic projection matrix as your aspect ratio has
-    // likely changed.
+    shader_->activate();
+
+    // When the renderable area changes, the projection matrix has to also be updated.
     if (shaderNeedsNewProjectionMatrix_) {
-        // a placeholder projection matrix allocated on the stack. Column-major memory layout
-        float projectionMatrix[16] = {0};
-
-        // build an orthographic projection matrix for 2d rendering
-        Utility::buildOrthographicMatrix(
-                projectionMatrix,
-                kProjectionHalfHeight,
-                float(width_) / height_,
-                kProjectionNearPlane,
-                kProjectionFarPlane);
-
-        // send the matrix to the shader
-        // Note: the shader must be active for this to work. Since we only have one shader for this
-        // demo, we can assume that it's active.
-        shader_->setProjectionMatrix(projectionMatrix);
-
-        // make sure the matrix isn't generated every frame
+        Utility::buildPerspectiveMatrix(
+                projectionMatrix_.data(),
+                kFieldOfViewRadians,
+                float(width_) / float(height_),
+                kNearPlane,
+                kFarPlane);
         shaderNeedsNewProjectionMatrix_ = false;
+        shader_->setProjectionMatrix(projectionMatrix_.data());
     }
 
-    // clear the color buffer
-    glClear(GL_COLOR_BUFFER_BIT);
+    if (viewNeedsUpdate_) {
+        Utility::buildIdentityMatrix(viewMatrix_.data());
+        viewMatrix_[12] = 0.f;
+        viewMatrix_[13] = 0.f;
+        viewMatrix_[14] = -kCameraDistance;
+        shader_->setViewMatrix(viewMatrix_.data());
+        viewNeedsUpdate_ = false;
+    }
 
-    // Render all the models. There's no depth testing in this sample so they're accepted in the
-    // order provided. But the sample EGL setup requests a 24 bit depth buffer so you could
-    // configure it at the end of initRenderer
+    if (modelNeedsUpdate_) {
+        float rotationX[16];
+        float rotationY[16];
+        Utility::buildRotationMatrixX(rotationX, rotationX_);
+        Utility::buildRotationMatrixY(rotationY, rotationY_);
+        Utility::multiplyMatrix(modelMatrix_.data(), rotationY, rotationX);
+        shader_->setModelMatrix(modelMatrix_.data());
+        modelNeedsUpdate_ = false;
+    }
+
+    const float lightDir[3] = {0.3f, 0.6f, -1.0f};
+    shader_->setLightDirection(lightDir);
+
+    // clear the buffers
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Render all the models.
     if (!models_.empty()) {
         for (const auto &model: models_) {
             shader_->drawModel(model);
@@ -221,7 +240,16 @@ void Renderer::initRenderer() {
     PRINT_GL_STRING_AS_LIST(GL_EXTENSIONS);
 
     shader_ = std::unique_ptr<Shader>(
-            Shader::loadShader(vertex, fragment, "inPosition", "inUV", "uProjection"));
+            Shader::loadShader(
+                    vertex,
+                    fragment,
+                    "inPosition",
+                    "inUV",
+                    "uModel",
+                    "uView",
+                    "uProjection",
+                    "uLightDir",
+                    "uTexture"));
     assert(shader_);
 
     // Note: there's only one shader in this demo, so I'll activate it here. For a more complex game
@@ -230,6 +258,9 @@ void Renderer::initRenderer() {
 
     // setup any other gl related global states
     glClearColor(CORNFLOWER_BLUE);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
 
     // enable alpha globally for now, you probably don't want to do this in a game
     glEnable(GL_BLEND);
@@ -260,33 +291,57 @@ void Renderer::updateRenderArea() {
  * @brief Create any demo models we want for this demo.
  */
 void Renderer::createModels() {
-    /*
-     * This is a square:
-     * 0 --- 1
-     * | \   |
-     * |  \  |
-     * |   \ |
-     * 3 --- 2
-     */
-    std::vector<Vertex> vertices = {
-            Vertex(Vector3{1, 1, 0}, Vector2{0, 0}), // 0
-            Vertex(Vector3{-1, 1, 0}, Vector2{1, 0}), // 1
-            Vertex(Vector3{-1, -1, 0}, Vector2{1, 1}), // 2
-            Vertex(Vector3{1, -1, 0}, Vector2{0, 1}) // 3
-    };
-    std::vector<Index> indices = {
-            0, 1, 2, 0, 2, 3
-    };
+    const int latSegments = 64;
+    const int lonSegments = 128;
 
-    // loads an image and assigns it to the square.
-    //
-    // Note: there is no texture management in this sample, so if you reuse an image be careful not
-    // to load it repeatedly. Since you get a shared_ptr you can safely reuse it in many models.
-    auto assetManager = app_->activity->assetManager;
-    auto spAndroidRobotTexture = TextureAsset::loadAsset(assetManager, "android_robot.png");
+    std::vector<Vertex> vertices;
+    vertices.reserve((latSegments + 1) * (lonSegments + 1));
 
-    // Create a model and put it in the back of the render list.
-    models_.emplace_back(vertices, indices, spAndroidRobotTexture);
+    for (int lat = 0; lat <= latSegments; ++lat) {
+        float v = static_cast<float>(lat) / static_cast<float>(latSegments);
+        float theta = v * kPi;
+        float sinTheta = std::sin(theta);
+        float cosTheta = std::cos(theta);
+
+        for (int lon = 0; lon <= lonSegments; ++lon) {
+            float u = static_cast<float>(lon) / static_cast<float>(lonSegments);
+            float phi = u * 2.f * kPi;
+            float sinPhi = std::sin(phi);
+            float cosPhi = std::cos(phi);
+
+            Vector3 position{
+                    sinTheta * cosPhi,
+                    cosTheta,
+                    sinTheta * sinPhi
+            };
+            Vector2 uv{u, v};
+            vertices.emplace_back(position, uv);
+        }
+    }
+
+    std::vector<Index> indices;
+    indices.reserve(latSegments * lonSegments * 6);
+    int rowStride = lonSegments + 1;
+    for (int lat = 0; lat < latSegments; ++lat) {
+        for (int lon = 0; lon < lonSegments; ++lon) {
+            Index topLeft = static_cast<Index>(lat * rowStride + lon);
+            Index topRight = static_cast<Index>(topLeft + 1);
+            Index bottomLeft = static_cast<Index>((lat + 1) * rowStride + lon);
+            Index bottomRight = static_cast<Index>(bottomLeft + 1);
+
+            indices.push_back(topLeft);
+            indices.push_back(bottomLeft);
+            indices.push_back(topRight);
+
+            indices.push_back(topRight);
+            indices.push_back(bottomLeft);
+            indices.push_back(bottomRight);
+        }
+    }
+
+    auto spEarthTexture = TextureAsset::createProceduralEarthTexture();
+
+    models_.emplace_back(std::move(vertices), std::move(indices), spEarthTexture);
 }
 
 void Renderer::handleInput() {
@@ -301,54 +356,65 @@ void Renderer::handleInput() {
     for (auto i = 0; i < inputBuffer->motionEventsCount; i++) {
         auto &motionEvent = inputBuffer->motionEvents[i];
         auto action = motionEvent.action;
-
-        // Find the pointer index, mask and bitshift to turn it into a readable value.
         auto pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
                 >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-        aout << "Pointer(s): ";
 
-        // get the x and y position of this event if it is not ACTION_MOVE.
-        auto &pointer = motionEvent.pointers[pointerIndex];
-        auto x = GameActivityPointerAxes_getX(&pointer);
-        auto y = GameActivityPointerAxes_getY(&pointer);
-
-        // determine the action type and process the event accordingly.
         switch (action & AMOTION_EVENT_ACTION_MASK) {
             case AMOTION_EVENT_ACTION_DOWN:
-            case AMOTION_EVENT_ACTION_POINTER_DOWN:
-                aout << "(" << pointer.id << ", " << x << ", " << y << ") "
-                     << "Pointer Down";
-                break;
-
-            case AMOTION_EVENT_ACTION_CANCEL:
-                // treat the CANCEL as an UP event: doing nothing in the app, except
-                // removing the pointer from the cache if pointers are locally saved.
-                // code pass through on purpose.
-            case AMOTION_EVENT_ACTION_UP:
-            case AMOTION_EVENT_ACTION_POINTER_UP:
-                aout << "(" << pointer.id << ", " << x << ", " << y << ") "
-                     << "Pointer Up";
-                break;
-
-            case AMOTION_EVENT_ACTION_MOVE:
-                // There is no pointer index for ACTION_MOVE, only a snapshot of
-                // all active pointers; app needs to cache previous active pointers
-                // to figure out which ones are actually moved.
-                for (auto index = 0; index < motionEvent.pointerCount; index++) {
-                    pointer = motionEvent.pointers[index];
-                    x = GameActivityPointerAxes_getX(&pointer);
-                    y = GameActivityPointerAxes_getY(&pointer);
-                    aout << "(" << pointer.id << ", " << x << ", " << y << ")";
-
-                    if (index != (motionEvent.pointerCount - 1)) aout << ",";
-                    aout << " ";
+            case AMOTION_EVENT_ACTION_POINTER_DOWN: {
+                auto &pointer = motionEvent.pointers[pointerIndex];
+                if (activePointerId_ == -1) {
+                    activePointerId_ = pointer.id;
+                    lastTouchX_ = GameActivityPointerAxes_getX(&pointer);
+                    lastTouchY_ = GameActivityPointerAxes_getY(&pointer);
                 }
-                aout << "Pointer Move";
                 break;
+            }
+            case AMOTION_EVENT_ACTION_CANCEL:
+            case AMOTION_EVENT_ACTION_UP:
+            case AMOTION_EVENT_ACTION_POINTER_UP: {
+                auto &pointer = motionEvent.pointers[pointerIndex];
+                if (pointer.id == activePointerId_) {
+                    activePointerId_ = -1;
+                }
+                break;
+            }
+            case AMOTION_EVENT_ACTION_MOVE: {
+                if (activePointerId_ == -1) {
+                    break;
+                }
+
+                for (auto index = 0; index < motionEvent.pointerCount; index++) {
+                    auto &pointer = motionEvent.pointers[index];
+                    if (pointer.id == activePointerId_) {
+                        float x = GameActivityPointerAxes_getX(&pointer);
+                        float y = GameActivityPointerAxes_getY(&pointer);
+                        float dx = x - lastTouchX_;
+                        float dy = y - lastTouchY_;
+                        lastTouchX_ = x;
+                        lastTouchY_ = y;
+
+                        int width = std::max(width_, 1);
+                        int height = std::max(height_, 1);
+                        rotationY_ += (dx / static_cast<float>(width)) * 2.f * kPi;
+                        rotationX_ += (dy / static_cast<float>(height)) * kPi;
+
+                        rotationX_ = std::clamp(rotationX_, -kMaxPitchRadians, kMaxPitchRadians);
+                        if (rotationY_ > kPi) {
+                            rotationY_ -= 2.f * kPi;
+                        } else if (rotationY_ < -kPi) {
+                            rotationY_ += 2.f * kPi;
+                        }
+
+                        modelNeedsUpdate_ = true;
+                        break;
+                    }
+                }
+                break;
+            }
             default:
-                aout << "Unknown MotionEvent Action: " << action;
+                break;
         }
-        aout << std::endl;
     }
     // clear the motion input count in this buffer for main thread to re-use.
     android_app_clear_motion_events(inputBuffer);
@@ -356,22 +422,9 @@ void Renderer::handleInput() {
     // handle input key events.
     for (auto i = 0; i < inputBuffer->keyEventsCount; i++) {
         auto &keyEvent = inputBuffer->keyEvents[i];
-        aout << "Key: " << keyEvent.keyCode <<" ";
-        switch (keyEvent.action) {
-            case AKEY_EVENT_ACTION_DOWN:
-                aout << "Key Down";
-                break;
-            case AKEY_EVENT_ACTION_UP:
-                aout << "Key Up";
-                break;
-            case AKEY_EVENT_ACTION_MULTIPLE:
-                // Deprecated since Android API level 29.
-                aout << "Multiple Key Actions";
-                break;
-            default:
-                aout << "Unknown KeyEvent Action: " << keyEvent.action;
+        if (keyEvent.action == AKEY_EVENT_ACTION_DOWN && keyEvent.keyCode == AKEYCODE_BACK) {
+            app_->destroyRequested = 1;
         }
-        aout << std::endl;
     }
     // clear the key input count too.
     android_app_clear_key_events(inputBuffer);

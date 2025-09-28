@@ -2,6 +2,8 @@
 #define ANDROIDGLINVESTIGATIONS_RENDERER_H
 
 #include <EGL/egl.h>
+#include <array>
+#include <cstdint>
 #include <memory>
 
 #include "Model.h"
@@ -21,7 +23,14 @@ public:
             context_(EGL_NO_CONTEXT),
             width_(0),
             height_(0),
-            shaderNeedsNewProjectionMatrix_(true) {
+            shaderNeedsNewProjectionMatrix_(true),
+            viewNeedsUpdate_(true),
+            modelNeedsUpdate_(true),
+            rotationX_(0.f),
+            rotationY_(0.f),
+            activePointerId_(-1),
+            lastTouchX_(0.f),
+            lastTouchY_(0.f) {
         initRenderer();
     }
 
@@ -66,9 +75,21 @@ private:
     EGLint height_;
 
     bool shaderNeedsNewProjectionMatrix_;
+    bool viewNeedsUpdate_;
+    bool modelNeedsUpdate_;
 
     std::unique_ptr<Shader> shader_;
     std::vector<Model> models_;
+
+    std::array<float, 16> projectionMatrix_{};
+    std::array<float, 16> viewMatrix_{};
+    std::array<float, 16> modelMatrix_{};
+
+    float rotationX_;
+    float rotationY_;
+    int32_t activePointerId_;
+    float lastTouchX_;
+    float lastTouchY_;
 };
 
 #endif //ANDROIDGLINVESTIGATIONS_RENDERER_H

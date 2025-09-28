@@ -29,6 +29,22 @@ public:
             float far);
 
     static float *buildIdentityMatrix(float *outMatrix);
+
+    static float *buildPerspectiveMatrix(
+            float *outMatrix,
+            float fovYRadians,
+            float aspect,
+            float near,
+            float far);
+
+    static float *multiplyMatrix(
+            float *outMatrix,
+            const float *lhs,
+            const float *rhs);
+
+    static float *buildRotationMatrixX(float *outMatrix, float radians);
+
+    static float *buildRotationMatrixY(float *outMatrix, float radians);
 };
 
 #endif //ANDROIDGLINVESTIGATIONS_UTILITY_H
