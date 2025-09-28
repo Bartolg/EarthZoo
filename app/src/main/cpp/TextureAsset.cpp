@@ -10,7 +10,7 @@
 
 namespace {
 
-std::shared_ptr<TextureAsset> createTextureFromPixels(const uint8_t *data, int width, int height) {
+GLuint createTextureFromPixels(const uint8_t *data, int width, int height) {
     GLuint textureId;
     glGenTextures(1, &textureId);
     glBindTexture(GL_TEXTURE_2D, textureId);
@@ -34,7 +34,7 @@ std::shared_ptr<TextureAsset> createTextureFromPixels(const uint8_t *data, int w
 
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    return std::shared_ptr<TextureAsset>(new TextureAsset(textureId));
+    return textureId;
 }
 
 } // namespace
@@ -73,13 +73,13 @@ TextureAsset::loadAsset(AAssetManager *assetManager, const std::string &assetPat
             upAndroidImageData->size());
     assert(decodeResult == ANDROID_IMAGE_DECODER_SUCCESS);
 
-    auto texture = createTextureFromPixels(upAndroidImageData->data(), width, height);
+    auto textureId = createTextureFromPixels(upAndroidImageData->data(), width, height);
 
     // cleanup helpers
     AImageDecoder_delete(pAndroidDecoder);
     AAsset_close(pAndroidRobotPng);
 
-    return texture;
+    return std::shared_ptr<TextureAsset>(new TextureAsset(textureId));
 }
 
 TextureAsset::~TextureAsset() {
@@ -165,5 +165,6 @@ std::shared_ptr<TextureAsset> TextureAsset::createProceduralEarthTexture() {
         }
     }
 
-    return createTextureFromPixels(pixels.data(), width, height);
+    auto textureId = createTextureFromPixels(pixels.data(), width, height);
+    return std::shared_ptr<TextureAsset>(new TextureAsset(textureId));
 }
