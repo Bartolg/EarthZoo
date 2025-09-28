@@ -1,4 +1,13 @@
 <resources>
     <string name="app_name">EarthZoo</string>
     <string name="earth_content_description">Illustration of Earth</string>
+    <string name="continent_selection_hint">Dotknij kontynentu, aby go zaznaczyć.</string>
+    <string name="selected_continent_format">Wybrany kontynent: %1$s</string>
+    <string name="continent_north_america">Ameryka Północna</string>
+    <string name="continent_south_america">Ameryka Południowa</string>
+    <string name="continent_europe">Europa</string>
+    <string name="continent_africa">Afryka</string>
+    <string name="continent_asia">Azja</string>
+    <string name="continent_australia">Australia</string>
+    <string name="continent_antarctica">Antarktyda</string>
 </resources>
