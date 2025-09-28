@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">EarthZoo</string>
+    <string name="earth_content_description">Illustration of Earth</string>
 </resources>
