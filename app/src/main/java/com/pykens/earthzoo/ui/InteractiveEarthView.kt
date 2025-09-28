@@ -1,5 +1,8 @@
 package com.pykens.earthzoo.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -12,6 +15,7 @@ import android.os.Parcelable
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import androidx.annotation.StringRes
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
@@ -194,13 +198,18 @@ class InteractiveEarthView @JvmOverloads constructor(
     private val inverseMatrix = Matrix()
     private val baseMatrix = Matrix()
     private val zoomMatrix = Matrix()
+    private val animatedMatrix = Matrix()
     private val continentBounds = RectF()
     private val workingPath = Path()
     private val transformedPath = Path()
+    private val startMatrixValues = FloatArray(9)
+    private val endMatrixValues = FloatArray(9)
+    private val animatedMatrixValues = FloatArray(9)
 
     private var selectedContinent: Continent? = null
     private var isZoomed = false
     private var onContinentSelectedListener: ((String) -> Unit)? = null
+    private var zoomAnimator: ValueAnimator? = null
 
     init {
         isClickable = true
@@ -307,6 +316,7 @@ class InteractiveEarthView @JvmOverloads constructor(
     }
 
     private fun updateBaseMatrix() {
+        zoomAnimator?.cancel()
         val drawable = drawable ?: return
         val contentWidth = width - paddingLeft - paddingRight
         val contentHeight = height - paddingTop - paddingBottom
@@ -339,17 +349,57 @@ class InteractiveEarthView @JvmOverloads constructor(
     }
 
     private fun resetZoom() {
-        isZoomed = false
-        imageMatrix = baseMatrix
-        invalidate()
+        zoomAnimator?.cancel()
+        if (isZoomed) {
+            isZoomed = false
+            animateImageMatrix(Matrix(baseMatrix))
+        } else {
+            imageMatrix = baseMatrix
+            invalidate()
+        }
     }
 
     private fun zoomToContinent(continent: Continent): Boolean {
         val matrix = computeZoomMatrix(continent) ?: return false
-        imageMatrix = matrix
         isZoomed = true
-        invalidate()
+        animateImageMatrix(Matrix(matrix))
         return true
+    }
+
+    private fun animateImageMatrix(targetMatrix: Matrix) {
+        zoomAnimator?.cancel()
+
+        val startMatrix = Matrix(imageMatrix)
+        startMatrix.getValues(startMatrixValues)
+        targetMatrix.getValues(endMatrixValues)
+
+        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 600L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { valueAnimator ->
+                val fraction = valueAnimator.animatedValue as Float
+                for (i in startMatrixValues.indices) {
+                    animatedMatrixValues[i] = startMatrixValues[i] + (endMatrixValues[i] - startMatrixValues[i]) * fraction
+                }
+                animatedMatrix.setValues(animatedMatrixValues)
+                imageMatrix = animatedMatrix
+                invalidate()
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    zoomAnimator = null
+                    imageMatrix = targetMatrix
+                    invalidate()
+                }
+
+                override fun onAnimationCancel(animation: Animator) {
+                    zoomAnimator = null
+                }
+            })
+        }
+
+        zoomAnimator = animator
+        animator.start()
     }
 
     private fun computeZoomMatrix(continent: Continent): Matrix? {
