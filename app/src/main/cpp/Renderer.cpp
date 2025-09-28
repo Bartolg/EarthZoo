@@ -339,7 +339,8 @@ void Renderer::createModels() {
         }
     }
 
-    auto spEarthTexture = TextureAsset::createProceduralEarthTexture();
+    auto *assetManager = app_->activity->assetManager;
+    auto spEarthTexture = TextureAsset::loadAsset(assetManager, "earth.png");
 
     models_.emplace_back(std::move(vertices), std::move(indices), spEarthTexture);
 }

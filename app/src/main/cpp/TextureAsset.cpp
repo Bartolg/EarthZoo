@@ -42,14 +42,17 @@ GLuint createTextureFromPixels(const uint8_t *data, int width, int height) {
 std::shared_ptr<TextureAsset>
 TextureAsset::loadAsset(AAssetManager *assetManager, const std::string &assetPath) {
     // Get the image from asset manager
-    auto pAndroidRobotPng = AAssetManager_open(
+    assert(assetManager != nullptr);
+
+    auto pAsset = AAssetManager_open(
             assetManager,
             assetPath.c_str(),
             AASSET_MODE_BUFFER);
+    assert(pAsset != nullptr);
 
     // Make a decoder to turn it into a texture
     AImageDecoder *pAndroidDecoder = nullptr;
-    auto result = AImageDecoder_createFromAAsset(pAndroidRobotPng, &pAndroidDecoder);
+    auto result = AImageDecoder_createFromAAsset(pAsset, &pAndroidDecoder);
     assert(result == ANDROID_IMAGE_DECODER_SUCCESS);
 
     // make sure we get 8 bits per channel out. RGBA order.
@@ -77,7 +80,7 @@ TextureAsset::loadAsset(AAssetManager *assetManager, const std::string &assetPat
 
     // cleanup helpers
     AImageDecoder_delete(pAndroidDecoder);
-    AAsset_close(pAndroidRobotPng);
+    AAsset_close(pAsset);
 
     return std::shared_ptr<TextureAsset>(new TextureAsset(textureId));
 }
