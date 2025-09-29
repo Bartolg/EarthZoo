@@ -10,12 +10,14 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
+import android.graphics.drawable.Drawable
 import android.os.Parcel
 import android.os.Parcelable
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
@@ -26,7 +28,8 @@ import kotlin.math.min
 
 private data class Continent(
     @StringRes val nameRes: Int,
-    val polygon: List<PointF>
+    val polygon: List<PointF>,
+    @DrawableRes val baseLayerRes: Int? = null
 )
 
 class InteractiveEarthView @JvmOverloads constructor(
@@ -135,7 +138,8 @@ class InteractiveEarthView @JvmOverloads constructor(
                 point(0.6038f, 0.4961f),
                 point(0.6012f, 0.4551f),
                 point(0.6400f, 0.4839f)
-            )
+            ),
+            R.drawable.africa
         ),
         Continent(
             R.string.continent_asia,
@@ -222,9 +226,16 @@ class InteractiveEarthView @JvmOverloads constructor(
     private var onContinentSelectedListener: ((String) -> Unit)? = null
     private var zoomAnimator: ValueAnimator? = null
 
+    private var defaultDrawableState: Drawable.ConstantState? = null
+    @DrawableRes
+    private val fallbackDefaultDrawableResId: Int = R.drawable.earth
+    @DrawableRes
+    private var currentOverrideDrawableRes: Int? = null
+
     init {
         isClickable = true
         scaleType = ScaleType.MATRIX
+        defaultDrawableState = drawable?.constantState
     }
 
     fun setOnContinentSelectedListener(listener: ((String) -> Unit)?) {
@@ -253,6 +264,7 @@ class InteractiveEarthView @JvmOverloads constructor(
                 if (newSelection != null) {
                     if (selectedContinent != newSelection) {
                         selectedContinent = newSelection
+                        updateBaseLayerForSelection(newSelection)
                         if (isZoomed) {
                             resetZoom()
                         } else {
@@ -294,6 +306,7 @@ class InteractiveEarthView @JvmOverloads constructor(
             super.onRestoreInstanceState(state.superState)
             val restored = state.selectedIndex.takeIf { it in continents.indices }?.let { continents[it] }
             selectedContinent = restored
+            updateBaseLayerForSelection(restored)
             isZoomed = state.isZoomed
             if (restored != null) {
                 onContinentSelectedListener?.invoke(context.getString(restored.nameRes))
@@ -511,6 +524,26 @@ class InteractiveEarthView @JvmOverloads constructor(
 
     companion object {
         private fun point(x: Float, y: Float) = PointF(x, y)
+    }
+
+    private fun updateBaseLayerForSelection(continent: Continent?) {
+        val overrideResId = continent?.baseLayerRes
+        if (overrideResId != null) {
+            if (currentOverrideDrawableRes != overrideResId) {
+                currentOverrideDrawableRes = overrideResId
+                setImageResource(overrideResId)
+                updateBaseMatrix()
+            }
+        } else if (currentOverrideDrawableRes != null) {
+            currentOverrideDrawableRes = null
+            val restored = defaultDrawableState?.newDrawable()?.mutate()
+            if (restored != null) {
+                setImageDrawable(restored)
+            } else {
+                setImageResource(fallbackDefaultDrawableResId)
+            }
+            updateBaseMatrix()
+        }
     }
 
     private class SavedState : View.BaseSavedState {
