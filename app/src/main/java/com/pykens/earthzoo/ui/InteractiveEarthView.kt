@@ -568,15 +568,19 @@ class InteractiveEarthView @JvmOverloads constructor(
             mutable.getPixels(pixels, 0, width, 0, 0, width, height)
             for (index in pixels.indices) {
                 val color = pixels[index]
-                if (Color.red(color) != 0 || Color.green(color) != 0 || Color.blue(color) != 0) {
-                    pixels[index] = Color.TRANSPARENT
+                val red = Color.red(color)
+                val green = Color.green(color)
+                val blue = Color.blue(color)
+                val alpha = Color.alpha(color)
+                val isPureBlack = red == 0 && green == 0 && blue == 0
+                // The overlay encodes the grey fill as semi-transparent black. Treat any
+                // partially transparent pixel as background so only the solid black outline
+                // remains visible.
+                val isOpaqueEnough = alpha >= 250
+                pixels[index] = if (isPureBlack && isOpaqueEnough) {
+                    Color.BLACK
                 } else {
-                    val alpha = Color.alpha(color)
-                    pixels[index] = if (alpha == 0) {
-                        Color.TRANSPARENT
-                    } else {
-                        Color.argb(alpha, 0, 0, 0)
-                    }
+                    Color.TRANSPARENT
                 }
             }
             mutable.setPixels(pixels, 0, width, 0, 0, width, height)
