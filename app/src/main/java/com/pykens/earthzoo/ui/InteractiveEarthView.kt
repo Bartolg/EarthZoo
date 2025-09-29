@@ -4,12 +4,15 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Parcel
 import android.os.Parcelable
@@ -21,6 +24,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import com.pykens.earthzoo.R
 import kotlin.math.abs
 import kotlin.math.max
@@ -231,6 +235,7 @@ class InteractiveEarthView @JvmOverloads constructor(
     private val fallbackDefaultDrawableResId: Int = R.drawable.earth
     @DrawableRes
     private var currentOverrideDrawableRes: Int? = null
+    private val filteredOverrideBitmaps = mutableMapOf<Int, Bitmap>()
 
     init {
         isClickable = true
@@ -531,7 +536,12 @@ class InteractiveEarthView @JvmOverloads constructor(
         if (overrideResId != null) {
             if (currentOverrideDrawableRes != overrideResId) {
                 currentOverrideDrawableRes = overrideResId
-                setImageResource(overrideResId)
+                val filtered = getFilteredOverrideDrawable(overrideResId)
+                if (filtered != null) {
+                    setImageDrawable(filtered)
+                } else {
+                    setImageResource(overrideResId)
+                }
                 updateBaseMatrix()
             }
         } else if (currentOverrideDrawableRes != null) {
@@ -544,6 +554,36 @@ class InteractiveEarthView @JvmOverloads constructor(
             }
             updateBaseMatrix()
         }
+    }
+
+    private fun getFilteredOverrideDrawable(@DrawableRes resId: Int): Drawable? {
+        val cachedBitmap = filteredOverrideBitmaps[resId]
+        val bitmap = cachedBitmap ?: run {
+            val drawable = ContextCompat.getDrawable(context, resId) ?: return null
+            val source = drawable.toBitmap(config = Bitmap.Config.ARGB_8888)
+            val mutable = source.copy(Bitmap.Config.ARGB_8888, true)
+            val width = mutable.width
+            val height = mutable.height
+            val pixels = IntArray(width * height)
+            mutable.getPixels(pixels, 0, width, 0, 0, width, height)
+            for (index in pixels.indices) {
+                val color = pixels[index]
+                if (Color.red(color) != 0 || Color.green(color) != 0 || Color.blue(color) != 0) {
+                    pixels[index] = Color.TRANSPARENT
+                } else {
+                    val alpha = Color.alpha(color)
+                    pixels[index] = if (alpha == 0) {
+                        Color.TRANSPARENT
+                    } else {
+                        Color.argb(alpha, 0, 0, 0)
+                    }
+                }
+            }
+            mutable.setPixels(pixels, 0, width, 0, 0, width, height)
+            filteredOverrideBitmaps[resId] = mutable
+            mutable
+        }
+        return BitmapDrawable(resources, bitmap)
     }
 
     private class SavedState : View.BaseSavedState {
