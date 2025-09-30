@@ -46,73 +46,41 @@ class InteractiveEarthView @JvmOverloads constructor(
         Continent(
             R.string.continent_north_america,
             listOf(
-                point(0.2786f, 0.0889f),
-                point(0.2448f, 0.1475f),
-                point(0.2070f, 0.1377f),
-                point(0.2734f, 0.1748f),
-                point(0.2956f, 0.2080f),
-                point(0.2878f, 0.2393f),
-                point(0.2760f, 0.2529f),
-                point(0.2500f, 0.2334f),
-                point(0.2591f, 0.2158f),
-                point(0.2422f, 0.1865f),
-                point(0.2435f, 0.2393f),
-                point(0.2240f, 0.2334f),
-                point(0.2070f, 0.2666f),
-                point(0.2448f, 0.3154f),
-                point(0.2435f, 0.2471f),
-                point(0.2604f, 0.2412f),
-                point(0.2904f, 0.2666f),
-                point(0.3190f, 0.3447f),
-                point(0.2917f, 0.3311f),
-                point(0.2982f, 0.3564f),
-                point(0.2591f, 0.3877f),
-                point(0.2409f, 0.4580f),
-                point(0.2005f, 0.4443f),
-                point(0.1940f, 0.4775f),
-                point(0.2214f, 0.4756f),
-                point(0.2344f, 0.5342f),
-                point(0.2865f, 0.5264f),
-                point(0.3555f, 0.5986f)
+                point(0.0400f, 0.1000f),
+                point(0.0400f, 0.2000f),
+                point(0.2600f, 0.4700f),
+                point(0.4200f, 0.2000f),
+                point(0.4300f, 0.0000f)
             )
         ),
         Continent(
             R.string.continent_south_america,
             listOf(
-                point(0.2194f, 0.5215f),
-                point(0.2467f, 0.5508f),
-                point(0.2337f, 0.6055f),
-                point(0.2650f, 0.6680f),
-                point(0.2493f, 0.8398f),
-                point(0.2715f, 0.8809f),
-                point(0.2806f, 0.8711f),
-                point(0.2702f, 0.8555f),
-                point(0.2806f, 0.7852f),
-                point(0.3483f, 0.6836f),
-                point(0.3639f, 0.6055f),
-                point(0.2650f, 0.5195f)
+                point(0.3194f, 0.4315f),
+                point(0.2667f, 0.4908f),
+                point(0.2537f, 0.5555f),
+                point(0.2850f, 0.6180f),
+                point(0.2693f, 0.7898f),
+                point(0.3115f, 0.8309f),
+                point(0.3206f, 0.8211f),
+                point(0.3102f, 0.8055f),
+                point(0.3206f, 0.7352f),
+                point(0.3883f, 0.6336f),
+                point(0.4039f, 0.5555f)
             )
         ),
         Continent(
             R.string.continent_europe,
             listOf(
-                point(0.4300f, 0.2400f),
-                point(0.4450f, 0.2000f),
+                point(0.4300f, 0.2000f),
                 point(0.4650f, 0.1700f),
-                point(0.4900f, 0.1500f),
-                point(0.5200f, 0.1450f),
-                point(0.5500f, 0.1550f),
-                point(0.5750f, 0.1750f),
-                point(0.5950f, 0.2050f),
+                point(0.5200f, 0.0950f),
+                point(0.6050f, 0.0950f),
                 point(0.6050f, 0.2350f),
-                point(0.5980f, 0.2600f),
                 point(0.5800f, 0.2800f),
-                point(0.5550f, 0.2950f),
                 point(0.5250f, 0.3050f),
-                point(0.4950f, 0.3100f),
                 point(0.4650f, 0.3050f),
-                point(0.4450f, 0.2900f),
-                point(0.4300f, 0.2700f)
+                point(0.4300f, 0.3000f)
             )
         ),
         Continent(
@@ -182,14 +150,14 @@ class InteractiveEarthView @JvmOverloads constructor(
         Continent(
             R.string.continent_australia,
             listOf(
-                point(0.8001f, 0.6328f),
-                point(0.7520f, 0.6855f),
-                point(0.7546f, 0.7480f),
-                point(0.8027f, 0.7383f),
-                point(0.8418f, 0.7773f),
-                point(0.8639f, 0.7090f),
-                point(0.8340f, 0.6328f),
-                point(0.8262f, 0.6602f)
+                point(0.8201f, 0.5628f), //
+                point(0.7620f, 0.6155f),
+                point(0.7746f, 0.6980f),
+                point(0.8227f, 0.6883f),
+                point(0.8618f, 0.7273f),
+                point(0.8839f, 0.6590f),
+                point(0.8540f, 0.5628f),
+                point(0.8462f, 0.5902f)
             )
         ),
         Continent(
